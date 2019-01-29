@@ -1,69 +1,215 @@
-$("#table-weeklyDatePicker").datetimepicker({
-  format: 'YYYY-MM-DD'
+var tableStartDate = "";
+var tableEndDate = "";
+
+$("#table-weeklyDatePickerStart").datetimepicker({
+  minDate: "2017/1/1",
+  maxDate: "2018/4/22",
+  format: 'YYYY-MM-DD',
+});
+$("#table-weeklyDatePickerStart").val(null);
+
+$("#table-weeklyDatePickerStart").on("dp.hide", function(d) {
+  if(tableStartDate == "") {
+    tableStartDate = $("#table-weeklyDatePickerStart").val();
+  } else if($("#table-weeklyDatePickerStart").val() == tableStartDate) {
+    return;
+  }
+  $('#table-content').empty();
+  $('#table-name').empty();
+  var start = $("#table-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var aidDateMin = moment(start, "YYYY-MM-DD").add(7, 'days').format("YYYY-MM-DD");
+  var aidDateMax = moment(start, "YYYY-MM-DD").add(30, 'days').format("YYYY-MM-DD");
+  $("#table-weeklyDatePickerEnd").datetimepicker({
+    minDate: aidDateMin,
+    maxDate: aidDateMax,
+    format: 'YYYY-MM-DD',
+  });
+  $("#table-weeklyDatePickerEnd").data("DateTimePicker").clear();
 });
 
-$("#table-weeklyDatePicker").on("dp.change", function() {
-  var value = $("#table-weeklyDatePicker").val();
-  var firstDate = moment(value, "YYYY-MM-DD").day(0).format("YYYY-MM-DD");
-  var lastDate = moment(value, "YYYY-MM-DD").day(6).format("YYYY-MM-DD");
-
+$("#table-weeklyDatePickerEnd").on("dp.hide", function(d) {
+  if(tableEndDate == "") {
+    tableEndDate = $("#table-weeklyDatePickerEnd").val();
+  } else if($("#table-weeklyDatePickerEnd").val() == tableEndDate) {
+    return;
+  }
+  tableStartDate = "";
+  tableEndDate = "";
+  var start = $("#table-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var end = $("#table-weeklyDatePickerEnd").val();
+  console.log(end);
+  var lastDate = moment(end, "YYYY-MM-DD").format("YYYY-MM-DD");
+  $("#table-select-town").empty();
+  $("#table-select-town").append("<option value='{0}'>{0}</option>".format('全區'));
+  $("#table-select-village").empty();
+  $("#table-select-village").append("<option value='{0}'>{0}</option>".format('全里'));
   $('#table-name').html('<h3 class="text-center">資料載入中...</h3>');
-  $("#table-weeklyDatePicker").val(firstDate + "~" + lastDate);
-
-  window.fetchWeek($("#table-weeklyDatePicker").val(), function() {
-    updateTableTownFormAndTitle();
-  });
+  tableFetchWeek(firstDate,lastDate,$("#table-select-country").val(),$("#table-select-town").val(),$("#table-select-village").val());
 });
 
 $("#table-select-country").change(function() {
+  var start = $("#table-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var end = $("#table-weeklyDatePickerEnd").val();
+  var lastDate = moment(end, "YYYY-MM-DD").format("YYYY-MM-DD");
+  $("#table-select-town").empty();
+  $("#table-select-town").append("<option value='{0}'>{0}</option>".format('全區'));
+  $("#table-select-village").empty();
+  $("#table-select-village").append("<option value='{0}'>{0}</option>".format('全里'));
   $('#table-name').html('<h3 class="text-center">資料載入中...</h3>');
-
-  window.fetchWeek($("#table-weeklyDatePicker").val(), function() {
-    updateTableTownFormAndTitle();
-  });
+  tableFetchWeek(firstDate,lastDate,$("#table-select-country").val(),$("#table-select-town").val(),$("#table-select-village").val());
 });
 
 $("#table-select-town").change(function() {
+  var start = $("#table-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var end = $("#table-weeklyDatePickerEnd").val();
+  var lastDate = moment(end, "YYYY-MM-DD").format("YYYY-MM-DD");
+  $("#table-select-village").empty();
+  $("#table-select-village").append("<option value='{0}'>{0}</option>".format('全里'));
   $('#table-name').html('<h3 class="text-center">資料載入中...</h3>');
-
-  window.fetchWeek($("#table-weeklyDatePicker").val(), function() {
-    appendTable('#table-content', $("#table-weeklyDatePicker").val());
-    updateTableTitle();
-  });
+  tableFetchWeek(firstDate,lastDate,$("#table-select-country").val(),$("#table-select-town").val(),$("#table-select-village").val());
 });
 
-function updateTableTownFormAndTitle() {
+function tableFetchWeek(firstDate,lastDate,county,town) {
+  var params;
+  var townTaken = false;
+  if(town == '全區' || town == '無資料') {
+    params = {
+      start : firstDate,
+      end : lastDate,
+      county : county
+    };
+  }
+  else {
+    townTaken = true;
+    params = {
+      start : firstDate,
+      end : lastDate,
+      county : county,
+      town : town
+    };
+  }
+  $.getJSON(
+    "http://54.91.186.134/api/bucket-record/",
+    params,
+    function(data) {
+      var lookup = {};
+      var towns;
+      if(!townTaken) {
+        townresult.length = 0;
+        towns = data.map(function(d){ return d.town});
+        townresult = $.unique(towns);
+      }
+      tableUpdateTownForm(townresult, townTaken);
+      appendTable('#chart', data, townTaken, townresult);
+      updateTableTitle();
+    });
+}
 
+function tableUpdateTownForm(townresult, townTaken) {
   var week = $("#table-weeklyDatePicker").val();
-  var country = $("#table-select-country").val();
-  var townsHasData = window.getKeys(window.allWeekResult[week][country])
-  if (townsHasData.length > 0) {
-    $("#table-select-town").empty();
+  var county = $("#table-select-country").val();
+  var insertHTML;
 
-    townsHasData.forEach(function(town) {
-      var insertHTML = "<option value='{0}'>{0}</option>".format(town, town);
+  if(townTaken == false){
+    $("#table-select-town").empty();
+    if (townresult.length === 0) {
+      insertHTML = "<option value='{0}'>{0}</option>".format('無資料');
       $("#table-select-town").append(insertHTML);
-      $('#table-select-town').trigger("change");
+    } else {
+      $("#table-select-town").append("<option value='{0}'>{0}</option>".format('全區'));
+      townresult.forEach(function(t) {
+        var insertHTML = "<option value='{0}'>{0}</option>".format(t);
+        $("#table-select-town").append(insertHTML);
+      });
+    }
+  }
+}
+
+function produceTableData(data, townTaken, townresult) {
+  var country = $("#table-select-country").val();
+  var town = $("#table-select-town").val();
+  var bucketNum = data.length;
+  var bucketHasEgg = 0;
+  var eggSum = 0;
+  var returnData = [];
+  
+  if(townTaken){
+    var lookup = {};
+    var villages;
+    var villageresult = [];
+    villages = data.map(function(d){ return d.village});
+    villageresult = $.unique(villages);
+    villageresult.forEach(function(villageid) {
+      var villagelist = data.filter(function(t) {
+        return t.village == villageid;
+      })
+      
+      
+      var bucketNum = villagelist.length;
+      var bucketHasEgg = 0;
+      var eggSum = 0;
+      villagelist.forEach(function(element){   
+        var eggNum = element.egg_count;
+        if(eggNum > 0 && !isNaN(eggNum)) {
+          bucketHasEgg++;
+          eggSum += eggNum;
+        }
+      });
+      if(eggSum > 0) {
+        returnData.push({
+          'name': town + ' ' + villageid,
+          'rate': 100 * (bucketHasEgg / bucketNum).toFixed(4),
+          'eggNum': (eggSum  / bucketNum * 10).toFixed(2)
+        });
+      }
+    });
+  } else {
+    townresult.forEach(function(townid) {
+      var townlist = data.filter(function(t) {
+        return t.town == townid;
+      })
+      town = townid;
+      var lookup = {};
+      var items = townlist;
+      var villageresult = [];
+      var villages;
+      villages = items.map(function(d){ return d.village});
+      villageresult = $.unique(villages);
+      villageresult.forEach(function(villageid) {
+        var villagelist = data.filter(function(t) {
+          return t.village == villageid;
+        })
+        var bucketNum = villagelist.length;
+        var bucketHasEgg = 0;
+        var eggSum = 0;
+        villagelist.forEach(function(element){   
+          var eggNum = element.egg_count;
+          if(eggNum > 0 && !isNaN(eggNum)) {
+            bucketHasEgg++;
+            eggSum += eggNum;
+          }
+        });
+        if(eggSum > 0) {
+          returnData.push({
+            'name': town + ' ' + villageid,
+            'rate': 100 * (bucketHasEgg / bucketNum).toFixed(4),
+            'eggNum': (eggSum  / bucketNum * 10).toFixed(2)
+          });
+        }
+      });
     });
   }
-  if (townsHasData.length > 0 && townsHasData.length !== 1) {
-    $("#table-select-town").prepend("<option value='全區'>全區</option>");
-    $("#table-select-town").val('全區');
-    $('#table-select-town').trigger("change");
-  } else if (townsHasData.length === 1) {
-    appendTable('#table-content', $("#table-weeklyDatePicker").val());
-  } else if (townsHasData.length === 0) {
-    $("#table-select-town").empty();
-    var insertHTML = "<option value='{0}'>{1}</option>".format('無資料', '無資料');
-    $("#table-select-town").append(insertHTML);
-  }
-  updateTableTitle();
+  return returnData;
 }
 
 function updateTableTitle() {
   var country = $("#table-select-country").val();
   var town = $("#table-select-town").val();
-  var week = $("#table-weeklyDatePicker").val();
+  var week = $("#table-weeklyDatePickerStart").val()+"~"+$("#table-weeklyDatePickerEnd").val();
   var tableTitle;
 
   if (town === '無資料') {
@@ -78,48 +224,10 @@ function updateTableTitle() {
   $('#table-name').fadeIn('slow');
 }
 
-function produceTableData(week) {
-  var country = $("#table-select-country").val();
-  var town = $("#table-select-town").val();
-  var towns = [];
-  var data = [];
 
-  if (town === '全區') {
-    towns = window.getKeys(window.allWeekResult[week][country]);
-  } else {
-    towns.push(town);
-  }
+function appendTable(seletor, data, townTaken, townresult) {
 
-  towns.forEach(function(town) {
-    var villages = window.getKeys(window.allWeekResult[week][country][town]);
-    villages.forEach(function(village) {
-      var bucketes = window.getKeys(window.allWeekResult[week][country][town][village]);
-      var bucketNum = bucketes.length;
-      var bucketesHasEgg = 0;
-      var villageTotalEggNum = 0;
-      bucketes.forEach(function(bucket) {
-        var eggNum = window.allWeekResult[week][country][town][village][bucket].egg_num;
-        if (eggNum > 0 && !isNaN(eggNum)) {
-          bucketesHasEgg += 1;
-          villageTotalEggNum += eggNum;
-        }
-      })
-      if (villageTotalEggNum > 0) {
-        // eggNum: 每個里的bucket不一定只有10個，只算加起來的不公平，所以先乘10再除桶子數量
-        data.push({
-          'name': town + ' ' + village,
-          'rate': 100 * (bucketesHasEgg / bucketNum).toFixed(4),
-          'eggNum': (villageTotalEggNum * 10 / bucketes.length).toFixed(2)
-        })
-      }
-    })
-  })
-  return data;
-}
-
-function appendTable(seletor, week) {
-
-  var data = produceTableData(week);
+  var data = produceTableData(data, townTaken, townresult);
   var formatData = new Array(9);
   var stringData = new Array(9);
   var dataInterval = [500, 250, 0]

@@ -1,71 +1,138 @@
-$("#chart-weeklyDatePicker").datetimepicker({
-  format: 'YYYY-MM-DD'
+var chartStartDate = "";
+var chartEndDate = "";
+
+$("#chart-weeklyDatePickerStart").datetimepicker({
+  minDate: "2017/1/1",
+  maxDate: "2018/4/22",
+  format: 'YYYY-MM-DD',
+});
+$("#chart-weeklyDatePickerStart").val(null);
+
+$("#chart-weeklyDatePickerStart").on("dp.hide", function(d) {
+  if(chartStartDate == "") {
+    chartStartDate = $("#chart-weeklyDatePickerStart").val();
+  } else if($("#chart-weeklyDatePickerStart").val() == chartStartDate) {
+    return;
+  }
+  $("#chart").empty();
+  $('#analysis-name').empty();
+  var start = $("#chart-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var aidDateMin = moment(start, "YYYY-MM-DD").add(7, 'days').format("YYYY-MM-DD");
+  var aidDateMax = moment(start, "YYYY-MM-DD").add(30, 'days').format("YYYY-MM-DD");
+  $("#chart-weeklyDatePickerEnd").datetimepicker({
+    minDate: aidDateMin,
+    maxDate: aidDateMax,
+    format: 'YYYY-MM-DD',
+  });
+  $("#chart-weeklyDatePickerEnd").data("DateTimePicker").clear();
 });
 
-$("#chart-weeklyDatePicker").on("dp.change", function() {
-  var value = $("#chart-weeklyDatePicker").val();
-  var firstDate = moment(value, "YYYY-MM-DD").day(0).format("YYYY-MM-DD");
-  var lastDate = moment(value, "YYYY-MM-DD").day(6).format("YYYY-MM-DD");
-
+$("#chart-weeklyDatePickerEnd").on("dp.hide", function(d) {
+  if(chartEndDate == "") {
+    chartEndDate = $("#chart-weeklyDatePickerEnd").val();
+  } else if($("#chart-weeklyDatePickerEnd").val() == chartEndDate) {
+    return;
+  }
+  chartStartDate = "";
+  chartEndDate = "";
+  var start = $("#chart-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var end = $("#chart-weeklyDatePickerEnd").val();
+  console.log(end);
+  var lastDate = moment(end, "YYYY-MM-DD").format("YYYY-MM-DD");
+  $("#chart-select-town").empty();
+  $("#chart-select-town").append("<option value='{0}'>{0}</option>".format('全區'));
+  $("#chart-select-village").empty();
+  $("#chart-select-village").append("<option value='{0}'>{0}</option>".format('全里'));
   $('#analysis-name').html('<h3 class="text-center">資料載入中...</h3>');
-  $("#chart-weeklyDatePicker").val(firstDate + "~" + lastDate);
-
-  window.fetchWeek($("#chart-weeklyDatePicker").val(), function() {
-    updateTownFormAndTitle();
-  });
+  chartFetchWeek(firstDate,lastDate,$("#select-country").val(),$("#chart-select-town").val(),$("#chart-select-village").val());
 });
 
 $("#chart-select-country").change(function() {
+  var start = $("#chart-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var end = $("#chart-weeklyDatePickerEnd").val();
+  var lastDate = moment(end, "YYYY-MM-DD").format("YYYY-MM-DD");
+  $("#chart-select-town").empty();
+  $("#chart-select-town").append("<option value='{0}'>{0}</option>".format('全區'));
+  $("#chart-select-village").empty();
+  $("#chart-select-village").append("<option value='{0}'>{0}</option>".format('全里'));
   $('#analysis-name').html('<h3 class="text-center">資料載入中...</h3>');
-
-  window.fetchWeek($("#chart-weeklyDatePicker").val(), function() {
-    updateTownFormAndTitle();
-  });
+  chartFetchWeek(firstDate,lastDate,$("#chart-select-country").val(),$("#chart-select-town").val(),$("#chart-select-village").val());
 });
 
 $("#chart-select-town").change(function() {
+  var start = $("#chart-weeklyDatePickerStart").val();
+  var firstDate = moment(start, "YYYY-MM-DD").format("YYYY-MM-DD");
+  var end = $("#chart-weeklyDatePickerEnd").val();
+  var lastDate = moment(end, "YYYY-MM-DD").format("YYYY-MM-DD");
+  $("#chart-select-village").empty();
+  $("#chart-select-village").append("<option value='{0}'>{0}</option>".format('全里'));
   $('#analysis-name').html('<h3 class="text-center">資料載入中...</h3>');
-
-  window.fetchWeek($("#chart-weeklyDatePicker").val(), function() {
-    appendChart('#chart', $("#chart-weeklyDatePicker").val());
-    updateAnalysisTitle();
-  });
+  chartFetchWeek(firstDate,lastDate,$("#chart-select-country").val(),$("#chart-select-town").val(),$("#chart-select-village").val());
 });
 
-function updateTownFormAndTitle() {
-
-  var week = $("#chart-weeklyDatePicker").val();
-  var country = $("#chart-select-country").val();
-  var townsHasData = window.getKeys(window.allWeekResult[week][country])
-  if (townsHasData.length > 0) {
-    $("#chart-select-town").empty();
-
-    townsHasData.forEach(function(town) {
-      var insertHTML = "<option value='{0}'>{0}</option>".format(town, town);
-      $("#chart-select-town").append(insertHTML);
-      $('#chart-select-town').trigger("change");
+function chartFetchWeek(firstDate,lastDate,county,town) {
+  var params;
+  var townTaken = false;
+  if(town == '全區' || town == '無資料') {
+    params = {
+      start : firstDate,
+      end : lastDate,
+      county : county
+    };
+  }
+  else {
+    townTaken = true;
+    params = {
+      start : firstDate,
+      end : lastDate,
+      county : county,
+      town : town
+    };
+  }
+  $.getJSON(
+    "http://54.91.186.134/api/bucket-record/",
+    params,
+    function(data) {
+      var lookup = {};
+      var towns;
+      if(!townTaken) {
+        townresult.length = 0;
+        towns = data.map(function(d){ return d.town});
+        townresult = $.unique(towns);
+      }
+      chartUpdateTownForm(townresult, townTaken);
+      appendChart('#chart', data, townTaken, townresult);
+      updateAnalysisTitle();
     });
-  }
-  if (townsHasData.length > 0 && townsHasData.length !== 1) {
-    $("#chart-select-town").prepend("<option value='全區'>全區</option>");
-    $("#chart-select-town").val('全區');
-    $('#chart-select-town').trigger("change");
-  } else if (townsHasData.length === 1) {
-    appendChart('#chart', $("#chart-weeklyDatePicker").val());
-  } else if (townsHasData.length === 0) {
+}
+
+function chartUpdateTownForm(townresult, townTaken) {
+  var county = $("#chart-select-country").val();
+  var insertHTML;
+
+  if(townTaken == false){
     $("#chart-select-town").empty();
-    var insertHTML = "<option value='{0}'>{1}</option>".format('無資料', '無資料');
-    $("#chart-select-town").append(insertHTML);
+    if (townresult.length === 0) {
+      insertHTML = "<option value='{0}'>{0}</option>".format('無資料');
+      $("#chart-select-town").append(insertHTML);
+    } else {
+      $("#chart-select-town").append("<option value='{0}'>{0}</option>".format('全區'));
+      townresult.forEach(function(t) {
+        var insertHTML = "<option value='{0}'>{0}</option>".format(t);
+        $("#chart-select-town").append(insertHTML);
+      });
+    }
   }
-  updateAnalysisTitle();
 }
 
 function updateAnalysisTitle() {
   var country = $("#chart-select-country").val();
   var town = $("#chart-select-town").val();
-  var week = $("#chart-weeklyDatePicker").val();
+  var week = $("#chart-weeklyDatePickerStart").val()+"~"+$("#chart-weeklyDatePickerEnd").val();
   var analysisTitle;
-
   if (town === '無資料') {
     analysisTitle = '<h3 class="text-center">暫無資料</h3>';
     $('#chart').empty();
@@ -78,66 +145,98 @@ function updateAnalysisTitle() {
   $('#analysis-name').fadeIn('slow');
 }
 
-function produceChartData(week) {
+function produceChartData(data, townTaken, townresult) {
   var country = $("#chart-select-country").val();
   var town = $("#chart-select-town").val();
-  var data = [];
-  if (town === '全區') {
-    var towns = window.getKeys(window.allWeekResult[week][country]);
-    towns.forEach(function(town) {
-      var villages = window.getKeys(window.allWeekResult[week][country][town]);
-      villages.forEach(function(village) {
-        var bucketes = window.getKeys(window.allWeekResult[week][country][town][village]);
-        var bucketNum = bucketes.length;
-        var bucketesHasEgg = 0;
-        var villageTotalEggNum = 0;
-        bucketes.forEach(function(bucket) {
-          var eggNum = window.allWeekResult[week][country][town][village][bucket].egg_num;
-          if (eggNum > 0 && !isNaN(eggNum)) {
-            bucketesHasEgg += 1;
-            villageTotalEggNum += eggNum;
-          }
-        })
-        if (villageTotalEggNum > 0) {
-          data.push({
-            'name': town + ' ' + village,
-            'rate': 100 * (bucketesHasEgg / bucketNum).toFixed(4),
-            'eggNum': (villageTotalEggNum  / bucketNum * 10).toFixed(2)
-          })
-        }
-      })
-    })
-  } else {
-    var villages = window.getKeys(window.allWeekResult[week][country][town]);
-    villages.forEach(function(village) {
-      var bucketes = window.getKeys(window.allWeekResult[week][country][town][village]);
-      var bucketNum = bucketes.length;
-      var bucketesHasEgg = 0;
-      var villageTotalEggNum = 0;
-      bucketes.forEach(function(bucket) {
-        var eggNum = window.allWeekResult[week][country][town][village][bucket].egg_num;
-        if (eggNum > 0 && !isNaN(eggNum)) {
-          bucketesHasEgg += 1;
-          villageTotalEggNum += eggNum;
-        }
-      })
-      if (villageTotalEggNum > 0) {
-        data.push({
-          'name': town + ' ' + village,
-          'rate': 100 * (bucketesHasEgg / bucketNum).toFixed(4),
-          'eggNum': (villageTotalEggNum  / bucketNum * 10).toFixed(2)
-        })
+  var bucketNum = data.length;
+  var bucketHasEgg = 0;
+  var eggSum = 0;
+  var returnData = [];
+  
+  if(townTaken){
+    var lookup = {};
+    var items = data;
+    var villageresult = [];
+    // var result = [];
+    for (var item, i = 0; item = items[i++];) {
+      var village = item.village;
+      if (!(village in lookup)) {
+        lookup[village] = 1;
+        villageresult.push(village);
       }
-    })
+    }
+    villageresult.forEach(function(villageid) {
+      var villagelist = data.filter(function(t) {
+        return t.village == villageid;
+      })
+      
+      var bucketNum = villagelist.length;
+      var bucketHasEgg = 0;
+      var eggSum = 0;
+      villagelist.forEach(function(element){   
+        var eggNum = element.egg_count;
+        if(eggNum > 0 && !isNaN(eggNum)) {
+          bucketHasEgg++;
+          eggSum += eggNum;
+        }
+      });
+      if(eggSum > 0) {
+        returnData.push({
+          'name': town + ' ' + villageid,
+          'rate': 100 * (bucketHasEgg / bucketNum).toFixed(4),
+          'eggNum': (eggSum  / bucketNum * 10).toFixed(2)
+        });
+      }
+    });
+  } else {
+    townresult.forEach(function(townid) {
+      var townlist = data.filter(function(t) {
+        return t.town == townid;
+      })
+      town = townid;
+      var lookup = {};
+      var items = townlist;
+      var villageresult = [];
+      // var result = [];
+      for (var item, i = 0; item = items[i++];) {
+        var village = item.village;
+        if (!(village in lookup)) {
+          lookup[village] = 1;
+          villageresult.push(village);
+        }
+      }
+      villageresult.forEach(function(villageid) {
+        var villagelist = data.filter(function(t) {
+          return t.village == villageid;
+        })
+        var bucketNum = villagelist.length;
+        var bucketHasEgg = 0;
+        var eggSum = 0;
+        villagelist.forEach(function(element){   
+          var eggNum = element.egg_count;
+          if(eggNum > 0 && !isNaN(eggNum)) {
+            bucketHasEgg++;
+            eggSum += eggNum;
+          }
+        });
+        if(eggSum > 0) {
+          returnData.push({
+            'name': town + ' ' + villageid,
+            'rate': 100 * (bucketHasEgg / bucketNum).toFixed(4),
+            'eggNum': (eggSum  / bucketNum * 10).toFixed(2)
+          });
+        }
+      });
+    });
   }
-  return data;
+  
+  return returnData;
 }
 
-function appendChart(seletor, week) {
-  var data = produceChartData(week);
-
+function appendChart(seletor, data, townTaken, townresult) {
+  var data = produceChartData(data, townTaken, townresult);
   $(seletor).empty();
-  if (data.length === 0) {
+    if (data.length === 0) {
     $("#chart-select-town").empty();
     var insertHTML = "<option value='{0}'>{1}</option>".format('無資料', '無資料');
     $("#chart-select-town").append(insertHTML);
